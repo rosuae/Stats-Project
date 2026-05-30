@@ -1,13 +1,20 @@
+# ======================================================================
+# PROBLEMA 2: Aplicatie Shiny - Transformari de Variabile Aleatoare
+# ======================================================================
+# Autori: 
+# Data:   Mai 2026
+# ======================================================================
+
 library(shiny)
 library(bslib)
 library(ggplot2)
 library(dplyr)
-library(mvtnorm)
+library(mvtnorm)     # rmvnorm() pt Normala Bidimensionala
 library(plotly)
 library(gganimate)
 library(gifski)
 
-# Funcție ajutătoare pentru calcularea indicatorilor statistici empirici
+# Returneaza un data.frame cu indicatorii statistici empirici (medie, var, sd, cuartile)
 calculeaza_statistici <- function(valori) {
   if (length(valori) == 0) return(data.frame(Indicator = "Fără date", Valoare = NA))
   
@@ -20,31 +27,31 @@ calculeaza_statistici <- function(valori) {
   )
 }
 
-# ------------------------------------------------------------------------------
-# INTERFAȚA UTILIZATOR (UI)
-# ------------------------------------------------------------------------------
+# === INTERFATA UTILIZATOR ===
 ui <- navbarPage(
   title = "Transformări de Variabile Aleatoare",
   theme = bs_theme(version = 5, bootswatch = "flatly"),
   
-  # TAB 1: TRANSFORMĂRI UNIDIMENSIONALE
+  # TRANSFORMARI UNIDIMENSIONALE
   tabPanel(
     "Transformări Unidimensionale",
     sidebarLayout(
       sidebarPanel(
         h4("Configurare Simulare X"),
+        # Alegerea repartitiei
         selectInput("dist1d", "Repartiția lui X:",
                     choices = c("Normală N(µ, σ²)" = "norm",
                                 "Exponențială Exp(λ)" = "exp",
                                 "Uniformă Unif(a, b)" = "unif",
                                 "Gamma(α, θ)" = "gamma")),
         
-        # Panou dinamic pentru parametrii repartiției alese
+        # Parametrii se schimba dinamic in functie de repartitia aleasa
         uiOutput("din_params1d"),
         
         numericInput("n1d", "Dimensiunea eșantionului (n):", value = 1000, min = 10, step = 100),
         hr(),
         h4("Configurare Transformare g(x)"),
+        # Cele 5 transformari cerute
         selectInput("trans1d", "Alege transformarea g(x):",
                     choices = c("g(x) = x²" = "patrat",
                                 "g(x) = |x|" = "abs",
@@ -53,17 +60,20 @@ ui <- navbarPage(
                                 "g(x) = 1 / (1 + e⁻ˣ) [Sigmoid]" = "sigmoid")),
         
         br(),
+        # Butonul previne actualizarea haotica la fiecare modificare de parametru
         actionButton("sim1d", "Simulează", class = "btn-primary w-100")
       ),
       
       mainPanel(
         tabsetPanel(
+          # Afisarea histogramei lui X si a statisticilor empirice
           tabPanel("Variabila X", 
                    br(),
-                   plotlyOutput("plotX"), 
+                   plotlyOutput("plotX"),          # Histograma interactiva a lui X
                    h5("Statistici Empirice X"),
-                   tableOutput("statsX")),
+                   tableOutput("statsX")),         # Tabelul cu media, dispersia, etc.
           
+          # Afisarea histogramei lui Y = g(X) si a statisticilor
           tabPanel("Variabila Y = g(X)", 
                    br(),
                    uiOutput("warningLog"),
@@ -71,6 +81,7 @@ ui <- navbarPage(
                    h5("Statistici Empirice Y"),
                    tableOutput("statsY")),
           
+          # Comparatie vizuala X vs Y + interpretare automata
           tabPanel("Comparație & Interpretare", 
                    br(),
                    plotlyOutput("plotComp1d"),
@@ -84,25 +95,29 @@ ui <- navbarPage(
     )
   ),
   
-  # TAB 2: TRANSFORMĂRI BIDIMENSIONALE
+  # TRANSFORMARI BIDIMENSIONALE
   tabPanel(
     "Transformări Bidimensionale",
     sidebarLayout(
       sidebarPanel(
         h4("Mod Generare (X, Y)"),
+        # Modul indep = X,Y independente; mvnorm = Normala Bidimensionala cu rho
         radioButtons("mode2d", "Selectează modul:",
                      choices = c("Variante independente" = "indep",
                                  "Normală bidimensională" = "mvnorm")),
         hr(),
         uiOutput("din_params2d"),
         hr(),
+        # Cele 4 transformari bidimensionale
         selectInput("trans2d", "Alege transformarea h(X,Y):",
                     choices = c("h(X,Y) = X + Y" = "suma",
                                 "h(X,Y) = X - Y" = "diferenta",
                                 "h(X,Y) = X · Y" = "produs",
                                 "h(X,Y) = √(X² + Y²)" = "radical")),
+
         numericInput("n2d", "Dimensiunea eșantionului (n):", value = 1000, min = 10, step = 100),
         br(),
+
         actionButton("sim2d", "Simulează", class = "btn-primary w-100")
       ),
       
@@ -121,8 +136,8 @@ ui <- navbarPage(
           tabPanel("Histograme Marginale (X și Y)", 
                    br(),
                    fluidRow(
-                     column(6, plotOutput("histX2d")),
-                     column(6, plotOutput("histY2d"))
+                     column(6, plotOutput("histX2d")), # Histograma marginala X
+                     column(6, plotOutput("histY2d")) # Histograma marginala Y
                    )),
           
           tabPanel("Studiu Corelație (ρ)", 
@@ -130,6 +145,8 @@ ui <- navbarPage(
                    p("Vizualizarea efectului coeficientului de corelație în cazul unei repartiții Normale Bidimensionale:"),
                    plotlyOutput("corrStudy2d", height = "350px"),
                    br(),
+                   # Buton optional pentru generarea unei animatii GIF care arata
+                   # cum se schimba structura norului de puncte pe masura ce rho variaza
                    actionButton("genCorrAnim", "Generează animație ρ", class = "btn-secondary"),
                    br(), br(),
                    imageOutput("corrAnim2d")
@@ -139,10 +156,11 @@ ui <- navbarPage(
     )
   )
 )
-# logica server
+
+# === LOGICA SERVER ===
 server <- function(input, output, session) {
   
-  # --- TAB 1: DINAMIC UI PARAMETRI ---
+  # Parametri dinamici pt repartitia 1D aleasa
   output$din_params1d <- renderUI({
     switch(input$dist1d,
       "norm" = tagList(
@@ -163,13 +181,13 @@ server <- function(input, output, session) {
     )
   })
   
-  # tab 1: reactive pentru simulare 1d
+  # Simulare 1D se activeaza doar la apasarea butonului
   data1d <- eventReactive(input$sim1d, {
     n <- input$n1d
     dist <- input$dist1d
     trans <- input$trans1d
     
-    # Validări input primare
+    # Validari
     if (dist == "norm") {
       validate(need(input$sigma > 0, "Eroare: Deviația standard (σ) trebuie să fie strict pozitivă!"))
     } else if (dist == "exp") {
@@ -180,7 +198,7 @@ server <- function(input, output, session) {
       validate(need(input$alpha > 0 && input$theta > 0, "Eroare: Parametrii α și θ trebuie să fie strict pozitivi!"))
     }
     
-    # Generare X
+    # Generare esantion X din repartitia aleasa
     x <- switch(dist,
       "norm"  = rnorm(n, mean = input$mu, sd = input$sigma),
       "exp"   = rexp(n, rate = input$lambda),
@@ -188,11 +206,12 @@ server <- function(input, output, session) {
       "gamma" = rgamma(n, shape = input$alpha, scale = input$theta)
     )
     
-    # Aplicare g(x) și tratare cazuri speciale (log)
+    # Tratare log(x) pt valori
     warn_msg <- NULL
     x_filtered <- x
     
     if (trans == "log") {
+      # Numaram cate valori sunt <= 0
       ilegale <- sum(x <= 0)
       if (ilegale > 0) {
         warn_msg <- paste("Avertisment: Au fost identificate și eliminate", ilegale, 
@@ -201,6 +220,7 @@ server <- function(input, output, session) {
       }
     }
     
+    # Aplicare transformare g(x)
     y <- switch(trans,
       "patrat"  = x_filtered^2,
       "abs"     = abs(x_filtered),
@@ -217,7 +237,7 @@ server <- function(input, output, session) {
     list(x = x, x_filtered = x_filtered, y = y, warn_msg = warn_msg, dist = dist, trans = trans)
   })
   
-  # tab 1 randare rezultate
+  # Avertizare vizuala pt log pe valori negative
   output$warningLog <- renderUI({
     res <- data1d()
     if (!is.null(res$warn_msg)) {
@@ -225,6 +245,7 @@ server <- function(input, output, session) {
     }
   })
   
+  # Histograma X cu densitate teoretica suprapusa
   output$plotX <- renderPlotly({
     res <- data1d()
     df <- data.frame(x = res$x)
@@ -233,7 +254,7 @@ server <- function(input, output, session) {
       theme_minimal() +
       labs(title = "Histograma lui X și Densitatea Teoretică", x = "X", y = "Densitate")
 
-    # Suprapunere densitate teoretică în funcție de repartiție
+    # Suprapunere densitate teoretica
     if (res$dist == "norm") {
       p <- p + stat_function(fun = dnorm, args = list(mean = input$mu, sd = input$sigma), color = "#e74c3c", linewidth = 1)
     } else if (res$dist == "exp") {
@@ -246,6 +267,7 @@ server <- function(input, output, session) {
     ggplotly(p)
   })
   
+  # Histograma Y = g(X)
   output$plotY <- renderPlotly({
     res <- data1d()
     df <- data.frame(y = res$y)
@@ -256,6 +278,7 @@ server <- function(input, output, session) {
     ggplotly(p)
   })
   
+  # Comparatie vizuala X vs Y
   output$plotComp1d <- renderPlotly({
     res <- data1d()
     dfX <- data.frame(Valoare = res$x_filtered, Variabila = "X")
@@ -274,6 +297,7 @@ server <- function(input, output, session) {
   output$statsX <- renderTable({ calculeaza_statistici(data1d()$x) }, digits = 4)
   output$statsY <- renderTable({ calculeaza_statistici(data1d()$y) }, digits = 4)
   
+  # Interpretare automata a efectului transformarii
   output$interpret1d <- renderText({
     res <- data1d()
     trans <- res$trans
@@ -288,7 +312,7 @@ server <- function(input, output, session) {
     txt
   })
   
-  # tab 2 dinamic UI pentru parametrii
+  # Parametri dinamici pt modul 2D (indep sau Normal Bidimensional)
   output$din_params2d <- renderUI({
     if (input$mode2d == "indep") {
       tagList(
@@ -308,7 +332,7 @@ server <- function(input, output, session) {
     }
   })
   
-  # tab 2 reactive pentru simulare 2d
+  # Simulare 2D: genereaza (X,Y) si aplica h(X,Y)
   data2d <- eventReactive(input$sim2d, {
     n <- input$n2d
     mode <- input$mode2d
@@ -323,7 +347,7 @@ server <- function(input, output, session) {
         need(input$rho > -1 && input$rho < 1, "Coeficientul rho trebuie să fie în intervalul (-1, 1)!")
       )
       
-      # Construire matrice de covarianță pentru Normala Bidimensională
+      # Matrice de covarianta pt Normala Bidimensionala
       sigma_mat <- matrix(c(
         input$sigmaX^2, input$rho * input$sigmaX * input$sigmaY,
         input$rho * input$sigmaX * input$sigmaY, input$sigmaY^2
@@ -334,7 +358,7 @@ server <- function(input, output, session) {
       y <- sim_points[, 2]
     }
     
-    # Aplicare transformare bidimensională h(X,Y)
+    # Aplicare transformare h(X,Y)
     z <- switch(trans,
       "suma"      = x + y,
       "diferenta" = x - y,
@@ -349,8 +373,7 @@ server <- function(input, output, session) {
     showNotification("Simulare 2D completă", type = "message")
   })
   
-  #tab 2 randare rezultate
-
+  # Scatterplot (X,Y) cu linie de regresie
   output$scatter2d <- renderPlotly({
     res <- data2d()
     df <- data.frame(X = res$x, Y = res$y)
@@ -362,6 +385,7 @@ server <- function(input, output, session) {
     ggplotly(p)
   })
   
+  # Histograma Z = h(X,Y)
   output$histZ2d <- renderPlotly({
     res <- data2d()
     df <- data.frame(Z = res$z)
@@ -372,6 +396,7 @@ server <- function(input, output, session) {
     ggplotly(p)
   })
   
+  # Histograme marginale X si Y
   output$histX2d <- renderPlot({
     df <- data.frame(X = data2d()$x)
     ggplot(df, aes(x = X)) + geom_histogram(bins = 30, fill = "#34495e", color = "white") + 
@@ -384,12 +409,12 @@ server <- function(input, output, session) {
       theme_minimal() + labs(title = "Marginală Y")
   })
   
+  # Tabel: medie, dispersie pt X, Y, Z + covarianta si corelatie empirica
   output$stats2d <- renderTable({
     res <- data2d()
     cov_emp <- cov(res$x, res$y)
     cor_emp <- cor(res$x, res$y)
     
-    # Statistici de bază pentru X, Y, Z
     mX <- mean(res$x); vX <- var(res$x)
     mY <- mean(res$y); vY <- var(res$y)
     mZ <- mean(res$z); vZ <- var(res$z)
@@ -401,26 +426,31 @@ server <- function(input, output, session) {
     )
   }, digits = 4)
   
-  # Studiu dinamic comparativ pentru rho = 0, 0.5, -0.5
-
-  # Convert corrStudy2d to interactive as well
+  # Studiu comparativ
   output$corrStudy2d <- renderPlotly({
     n_study <- 400
     mu_x <- isnull_default(input$muX, 0)
     mu_y <- isnull_default(input$muY, 0)
     sX <- isnull_default(input$sigmaX, 1)
     sY <- isnull_default(input$sigmaY, 1)
+
+    # Protectie: deviatia standard trebuie sa fie strict pozitiva
     if(sX <= 0) sX <- 1
     if(sY <= 0) sY <- 1
+
     gen_df <- function(rho_val, label) {
       mat <- matrix(c(sX^2, rho_val*sX*sY, rho_val*sX*sY, sY^2), 2)
       pts <- rmvnorm(n_study, mean = c(mu_x, mu_y), sigma = mat)
       data.frame(X = pts[,1], Y = pts[,2], Scenariu = label)
     }
-    df1 <- gen_df(0, "ρ = 0 (Independente)")
-    df2 <- gen_df(0.5, "ρ = 0.5 (Pozitivă)")
-    df3 <- gen_df(-0.5, "ρ = -0.5 (Negativă)")
-    df_all <- rbind(df1, df2, df3)
+
+    df_all <- rbind(
+      gen_df(0, "ρ = 0 (Independente)"),
+      gen_df(0.5, "ρ = 0.5 (Pozitivă)"),
+      gen_df(-0.5, "ρ = -0.5 (Negativă)")
+    )
+
+    # panou per valoare rho
     p <- ggplot(df_all, aes(x = X, y = Y, color = Scenariu)) +
       geom_point(alpha = 0.5) +
       facet_wrap(~Scenariu) +
@@ -430,7 +460,7 @@ server <- function(input, output, session) {
     ggplotly(p)
   })
 
-  # Generate animation GIF for rho study on demand
+  # Animatie GIF variatia norului de puncte cand rho creste de la -0.5 la 0.5
   observeEvent(input$genCorrAnim, {
     showNotification("Generare animație ρ — poate dura câteva secunde...", type = "message")
     n_study <- 300
@@ -440,6 +470,7 @@ server <- function(input, output, session) {
     sY <- isnull_default(input$sigmaY, 1)
     if(sX <= 0) sX <- 1
     if(sY <= 0) sY <- 1
+
     rhos <- seq(-0.5, 0.5, by = 0.1)
     df_list <- lapply(rhos, function(rho_val) {
       mat <- matrix(c(sX^2, rho_val*sX*sY, rho_val*sX*sY, sY^2), 2)
@@ -447,27 +478,31 @@ server <- function(input, output, session) {
       data.frame(X = pts[,1], Y = pts[,2], rho = sprintf("%.2f", rho_val))
     })
     df_anim <- bind_rows(df_list)
+
     p_anim <- ggplot(df_anim, aes(x = X, y = Y)) +
       geom_point(alpha = 0.6, size = 1, color = "#2c3e50") +
       theme_minimal() +
       labs(title = 'ρ = {closest_state}') +
       transition_states(rho, transition_length = 2, state_length = 1) +
       ease_aes('linear')
+
     anim <- animate(p_anim, nframes = length(unique(df_anim$rho)) * 10, fps = 10, renderer = gifski_renderer())
     outfile <- tempfile(fileext = ".gif")
     anim_save(filename = outfile, animation = anim)
+
     output$corrAnim2d <- renderImage({
       list(src = outfile, contentType = 'image/gif', width = 700, height = 450)
     }, deleteFile = TRUE)
+
     showNotification("Animație generată", type = "message")
   })
 }
 
-# Funcție utilitară internă pentru siguranța randării inițiale a plotului de studiu
+# Returneaza val daca nu e NULL, altfel def (pt inputuri neinitializate)
 isnull_default <- function(val, def) {
   if (is.null(val)) return(def)
   return(val)
 }
 
-# Rulare aplicație
+# Pornire aplicatie
 shinyApp(ui = ui, server = server)
